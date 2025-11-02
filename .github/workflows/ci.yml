@@ -1,0 +1,39 @@
+name: CI - Build Check
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Aftman
+        uses: ok-nick/setup-aftman@v0.4.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rojo
+        run: |
+          aftman add rojo-rbx/rojo@7.4.0
+          aftman install
+
+      - name: Verify Rojo project
+        run: rojo build default.project.json --output test-build.rbxl
+
+      - name: Lint check (if using Selene)
+        continue-on-error: true
+        run: |
+          if command -v selene &> /dev/null; then
+            selene .
+          else
+            echo "Selene not installed, skipping lint"
+          fi
