@@ -53,47 +53,83 @@ jobs:
           // Read the file
           const fileContent = fs.readFileSync(FILE_PATH);
 
-          // Upload to Roblox
-          const options = {
-            hostname: 'data.roblox.com',
-            port: 443,
-            path: `/Data/Upload.ashx?assetid=${PLACE_ID}`,
-            method: 'POST',
-            headers: {
-              'Cookie': `.ROBLOSECURITY=${ROBLOSECURITY}`,
-              'User-Agent': 'Roblox/WinInet',
-              'Content-Type': 'application/xml',
-              'Content-Length': fileContent.length
-            }
-          };
+          // Function to get CSRF token
+          function getCsrfToken(callback) {
+            const options = {
+              hostname: 'auth.roblox.com',
+              port: 443,
+              path: '/v1/authentication-ticket',
+              method: 'POST',
+              headers: {
+                'Cookie': `.ROBLOSECURITY=${ROBLOSECURITY}`
+              }
+            };
 
-          const req = https.request(options, (res) => {
-            let data = '';
-
-            res.on('data', (chunk) => {
-              data += chunk;
-            });
-
-            res.on('end', () => {
-              if (res.statusCode === 200) {
-                console.log('Successfully deployed to Roblox!');
-                console.log('Response:', data);
-                process.exit(0);
+            const req = https.request(options, (res) => {
+              const csrfToken = res.headers['x-csrf-token'];
+              if (csrfToken) {
+                callback(null, csrfToken);
               } else {
-                console.error('Failed to deploy. Status code:', res.statusCode);
-                console.error('Response:', data);
-                process.exit(1);
+                callback(new Error('Failed to get CSRF token'));
               }
             });
-          });
 
-          req.on('error', (error) => {
-            console.error('Error deploying:', error);
-            process.exit(1);
-          });
+            req.on('error', callback);
+            req.end();
+          }
 
-          req.write(fileContent);
-          req.end();
+          // Get CSRF token first, then upload
+          getCsrfToken((err, csrfToken) => {
+            if (err) {
+              console.error('Error getting CSRF token:', err);
+              process.exit(1);
+            }
+
+            console.log('Got CSRF token, uploading...');
+
+            // Upload to Roblox
+            const options = {
+              hostname: 'data.roblox.com',
+              port: 443,
+              path: `/Data/Upload.ashx?assetid=${PLACE_ID}`,
+              method: 'POST',
+              headers: {
+                'Cookie': `.ROBLOSECURITY=${ROBLOSECURITY}`,
+                'User-Agent': 'Roblox/WinInet',
+                'Content-Type': 'application/xml',
+                'Content-Length': fileContent.length,
+                'X-CSRF-TOKEN': csrfToken
+              }
+            };
+
+            const req = https.request(options, (res) => {
+              let data = '';
+
+              res.on('data', (chunk) => {
+                data += chunk;
+              });
+
+              res.on('end', () => {
+                if (res.statusCode === 200) {
+                  console.log('Successfully deployed to Roblox!');
+                  console.log('Response:', data);
+                  process.exit(0);
+                } else {
+                  console.error('Failed to deploy. Status code:', res.statusCode);
+                  console.error('Response:', data);
+                  process.exit(1);
+                }
+              });
+            });
+
+            req.on('error', (error) => {
+              console.error('Error deploying:', error);
+              process.exit(1);
+            });
+
+            req.write(fileContent);
+            req.end();
+          });
           EOF
 
           # Run deployment
