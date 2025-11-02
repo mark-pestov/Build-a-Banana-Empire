@@ -53,24 +53,27 @@ jobs:
           // Read the file
           const fileContent = fs.readFileSync(FILE_PATH);
 
-          // Function to get CSRF token
+          // Function to get CSRF token by making a request that triggers the token header
           function getCsrfToken(callback) {
             const options = {
-              hostname: 'auth.roblox.com',
+              hostname: 'data.roblox.com',
               port: 443,
-              path: '/v1/authentication-ticket',
+              path: `/Data/Upload.ashx?assetid=${PLACE_ID}`,
               method: 'POST',
               headers: {
-                'Cookie': `.ROBLOSECURITY=${ROBLOSECURITY}`
+                'Cookie': `.ROBLOSECURITY=${ROBLOSECURITY}`,
+                'User-Agent': 'Roblox/WinInet'
               }
             };
 
             const req = https.request(options, (res) => {
+              // The X-CSRF-TOKEN comes in the response header, even on 403
               const csrfToken = res.headers['x-csrf-token'];
               if (csrfToken) {
+                console.log('Got CSRF token from response');
                 callback(null, csrfToken);
               } else {
-                callback(new Error('Failed to get CSRF token'));
+                callback(new Error('Failed to get CSRF token from response headers'));
               }
             });
 
