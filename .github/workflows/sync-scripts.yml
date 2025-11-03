@@ -30,20 +30,57 @@ jobs:
         run: |
           # Get ServerScriptService instance ID first
           echo "Fetching root children..."
-          SSS_RESPONSE=$(curl -s -X GET \
-            "https://apis.roblox.com/cloud/v2/universes/$UNIVERSE_ID/places/$PLACE_ID/instances/root/children" \
+          SSS_OP_RESPONSE=$(curl -s -X GET \
+            "https://apis.roblox.com/cloud/v2/universes/$UNIVERSE_ID/places/$PLACE_ID/instances/root:listChildren" \
             -H "x-api-key: $ROBLOX_API_KEY")
 
-          echo "API Response:"
-          echo "$SSS_RESPONSE" | jq '.' || echo "$SSS_RESPONSE"
+          echo "Operation Response:"
+          echo "$SSS_OP_RESPONSE" | jq '.'
 
-          SSS_ID=$(echo "$SSS_RESPONSE" | jq -r '.instances[] | select(.details.Name == "ServerScriptService") | .path' | sed 's/.*instances\///')
+          # Get the operation path to poll for results
+          OP_PATH=$(echo "$SSS_OP_RESPONSE" | jq -r '.path')
+          echo "Operation path: $OP_PATH"
+
+          # Poll the operation until done
+          for i in {1..10}; do
+            SSS_RESPONSE=$(curl -s -X GET \
+              "https://apis.roblox.com/$OP_PATH" \
+              -H "x-api-key: $ROBLOX_API_KEY")
+
+            DONE=$(echo "$SSS_RESPONSE" | jq -r '.done')
+            if [ "$DONE" = "true" ]; then
+              echo "Operation completed"
+              break
+            fi
+            echo "Waiting for operation... (attempt $i/10)"
+            sleep 2
+          done
+
+          echo "Final Response:"
+          echo "$SSS_RESPONSE" | jq '.'
+
+          SSS_ID=$(echo "$SSS_RESPONSE" | jq -r '.response.instances[] | select(.details.Name == "ServerScriptService") | .path' | sed 's/.*instances\///')
           echo "ServerScriptService ID: $SSS_ID"
 
           # Get all scripts in ServerScriptService
-          SCRIPTS_RESPONSE=$(curl -s -X GET \
-            "https://apis.roblox.com/cloud/v2/universes/$UNIVERSE_ID/places/$PLACE_ID/instances/$SSS_ID/children" \
+          SCRIPTS_OP_RESPONSE=$(curl -s -X GET \
+            "https://apis.roblox.com/cloud/v2/universes/$UNIVERSE_ID/places/$PLACE_ID/instances/$SSS_ID:listChildren" \
             -H "x-api-key: $ROBLOX_API_KEY")
+
+          SCRIPTS_OP_PATH=$(echo "$SCRIPTS_OP_RESPONSE" | jq -r '.path')
+
+          # Poll for scripts
+          for i in {1..10}; do
+            SCRIPTS_RESPONSE=$(curl -s -X GET \
+              "https://apis.roblox.com/$SCRIPTS_OP_PATH" \
+              -H "x-api-key: $ROBLOX_API_KEY")
+
+            DONE=$(echo "$SCRIPTS_RESPONSE" | jq -r '.done')
+            if [ "$DONE" = "true" ]; then
+              break
+            fi
+            sleep 2
+          done
 
           # Update each script
           for script_file in ServerScriptService/*.luau; do
@@ -52,7 +89,7 @@ jobs:
               echo "Syncing $script_name..."
 
               # Find instance ID for this script
-              INSTANCE_ID=$(echo "$SCRIPTS_RESPONSE" | jq -r ".instances[] | select(.details.Name == \"$script_name\") | .path" | sed 's/.*instances\///')
+              INSTANCE_ID=$(echo "$SCRIPTS_RESPONSE" | jq -r ".response.instances[] | select(.details.Name == \"$script_name\") | .path" | sed 's/.*instances\///')
 
               if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" == "null" ]; then
                 echo "Warning: Script $script_name not found in Roblox place. Skipping..."
@@ -103,7 +140,7 @@ jobs:
               echo "Syncing $script_name..."
 
               # Find instance ID for this script
-              INSTANCE_ID=$(echo "$SCRIPTS_RESPONSE" | jq -r ".instances[] | select(.details.Name == \"$script_name\") | .path" | sed 's/.*instances\///')
+              INSTANCE_ID=$(echo "$SCRIPTS_RESPONSE" | jq -r ".response.instances[] | select(.details.Name == \"$script_name\") | .path" | sed 's/.*instances\///')
 
               if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" == "null" ]; then
                 echo "Warning: Script $script_name not found in Roblox place. Skipping..."
