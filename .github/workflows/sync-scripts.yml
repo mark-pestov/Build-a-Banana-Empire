@@ -18,13 +18,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Aftman
+        uses: ok-nick/setup-aftman@v0.4.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Install rbxcloud
-        run: |
-          # Download and install rbxcloud
-          curl -L https://github.com/Sleitnick/rbxcloud/releases/latest/download/rbxcloud-linux-x86_64.zip -o rbxcloud.zip
-          unzip rbxcloud.zip
-          chmod +x rbxcloud
-          sudo mv rbxcloud /usr/local/bin/
+        run: aftman install
 
       - name: Sync ServerScriptService
         if: hashFiles('ServerScriptService/**') != ''

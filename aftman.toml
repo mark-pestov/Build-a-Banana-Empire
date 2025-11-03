@@ -1,0 +1,5 @@
+# Aftman configuration
+# Tools for Roblox development
+
+[tools]
+rbxcloud = "Sleitnick/rbxcloud@0.17.0"
