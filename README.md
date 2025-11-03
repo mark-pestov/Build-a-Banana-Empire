@@ -72,6 +72,12 @@ This project uses **GitHub Actions** with **rbxcloud** to automatically sync scr
 - **Official API** - Uses Roblox's supported Open Cloud API
 - **Selective updates** - Only syncs specific script files that changed
 
+## Current Status
+
+**Note**: The automatic script syncing workflow is currently **not functional** due to Roblox Instance API restrictions. The Instance API (required for updating individual scripts) is being blocked by Roblox's WAF (Web Application Firewall) even with proper permissions. This API appears to be in closed beta and not yet publicly available.
+
+The workflow infrastructure is complete and will work automatically once Roblox enables public access to the Instance API.
+
 ## Setup Instructions
 
 ### Step 1: Get Your Universe ID
