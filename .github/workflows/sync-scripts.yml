@@ -29,9 +29,13 @@ jobs:
           PLACE_ID: ${{ secrets.ROBLOX_PLACE_ID }}
         run: |
           # Get ServerScriptService instance ID first
+          echo "Fetching root children..."
           SSS_RESPONSE=$(curl -s -X GET \
             "https://apis.roblox.com/cloud/v2/universes/$UNIVERSE_ID/places/$PLACE_ID/instances/root/children" \
             -H "x-api-key: $ROBLOX_API_KEY")
+
+          echo "API Response:"
+          echo "$SSS_RESPONSE" | jq '.' || echo "$SSS_RESPONSE"
 
           SSS_ID=$(echo "$SSS_RESPONSE" | jq -r '.instances[] | select(.details.Name == "ServerScriptService") | .path' | sed 's/.*instances\///')
           echo "ServerScriptService ID: $SSS_ID"
