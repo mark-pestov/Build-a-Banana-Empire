@@ -18,31 +18,57 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Aftman
-        uses: ok-nick/setup-aftman@v0.4.2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install rbxcloud
-        run: aftman install
+      - name: Install jq (for JSON parsing)
+        run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Sync ServerScriptService
         if: hashFiles('ServerScriptService/**') != ''
         env:
           ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
           UNIVERSE_ID: ${{ secrets.ROBLOX_UNIVERSE_ID }}
+          PLACE_ID: ${{ secrets.ROBLOX_PLACE_ID }}
         run: |
-          # Sync all scripts in ServerScriptService
-          for script in ServerScriptService/*.luau; do
-            if [ -f "$script" ]; then
-              script_name=$(basename "$script" .luau)
+          # Get ServerScriptService instance ID first
+          SSS_RESPONSE=$(curl -s -X GET \
+            "https://apis.roblox.com/cloud/v2/universes/$UNIVERSE_ID/places/$PLACE_ID/instances/root/children" \
+            -H "x-api-key: $ROBLOX_API_KEY")
+
+          SSS_ID=$(echo "$SSS_RESPONSE" | jq -r '.instances[] | select(.details.Name == "ServerScriptService") | .path' | sed 's/.*instances\///')
+          echo "ServerScriptService ID: $SSS_ID"
+
+          # Get all scripts in ServerScriptService
+          SCRIPTS_RESPONSE=$(curl -s -X GET \
+            "https://apis.roblox.com/cloud/v2/universes/$UNIVERSE_ID/places/$PLACE_ID/instances/$SSS_ID/children" \
+            -H "x-api-key: $ROBLOX_API_KEY")
+
+          # Update each script
+          for script_file in ServerScriptService/*.luau; do
+            if [ -f "$script_file" ]; then
+              script_name=$(basename "$script_file" .luau)
               echo "Syncing $script_name..."
-              rbxcloud experience publish-script \
-                --api-key "$ROBLOX_API_KEY" \
-                --universe-id "$UNIVERSE_ID" \
-                --script "$script" \
-                --script-type ServerScript \
-                --script-name "$script_name" || echo "Failed to sync $script_name"
+
+              # Find instance ID for this script
+              INSTANCE_ID=$(echo "$SCRIPTS_RESPONSE" | jq -r ".instances[] | select(.details.Name == \"$script_name\") | .path" | sed 's/.*instances\///')
+
+              if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" == "null" ]; then
+                echo "Warning: Script $script_name not found in Roblox place. Skipping..."
+                continue
+              fi
+
+              echo "Found instance ID: $INSTANCE_ID"
+
+              # Read script content and escape for JSON
+              SCRIPT_CONTENT=$(cat "$script_file" | jq -Rs .)
+
+              # Update script via API
+              curl -s -X PATCH \
+                "https://apis.roblox.com/cloud/v2/universes/$UNIVERSE_ID/places/$PLACE_ID/instances/$INSTANCE_ID" \
+                -H "x-api-key: $ROBLOX_API_KEY" \
+                -H "Content-Type: application/json" \
+                -d "{\"engineInstance\": {\"Details\": {\"Script\": {\"Source\": $SCRIPT_CONTENT}}}}" \
+                | jq -r '.done // "Update initiated"'
+
+              echo "✓ Synced $script_name"
             fi
           done
 
@@ -51,18 +77,49 @@ jobs:
         env:
           ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
           UNIVERSE_ID: ${{ secrets.ROBLOX_UNIVERSE_ID }}
+          PLACE_ID: ${{ secrets.ROBLOX_PLACE_ID }}
         run: |
-          # Sync all scripts in ReplicatedStorage
-          for script in ReplicatedStorage/*.luau; do
-            if [ -f "$script" ]; then
-              script_name=$(basename "$script" .luau)
+          # Get ReplicatedStorage instance ID
+          RS_RESPONSE=$(curl -s -X GET \
+            "https://apis.roblox.com/cloud/v2/universes/$UNIVERSE_ID/places/$PLACE_ID/instances/root/children" \
+            -H "x-api-key: $ROBLOX_API_KEY")
+
+          RS_ID=$(echo "$RS_RESPONSE" | jq -r '.instances[] | select(.details.Name == "ReplicatedStorage") | .path' | sed 's/.*instances\///')
+          echo "ReplicatedStorage ID: $RS_ID"
+
+          # Get all scripts in ReplicatedStorage
+          SCRIPTS_RESPONSE=$(curl -s -X GET \
+            "https://apis.roblox.com/cloud/v2/universes/$UNIVERSE_ID/places/$PLACE_ID/instances/$RS_ID/children" \
+            -H "x-api-key: $ROBLOX_API_KEY")
+
+          # Update each script
+          for script_file in ReplicatedStorage/*.luau; do
+            if [ -f "$script_file" ]; then
+              script_name=$(basename "$script_file" .luau)
               echo "Syncing $script_name..."
-              rbxcloud experience publish-script \
-                --api-key "$ROBLOX_API_KEY" \
-                --universe-id "$UNIVERSE_ID" \
-                --script "$script" \
-                --script-type ModuleScript \
-                --script-name "$script_name" || echo "Failed to sync $script_name"
+
+              # Find instance ID for this script
+              INSTANCE_ID=$(echo "$SCRIPTS_RESPONSE" | jq -r ".instances[] | select(.details.Name == \"$script_name\") | .path" | sed 's/.*instances\///')
+
+              if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" == "null" ]; then
+                echo "Warning: Script $script_name not found in Roblox place. Skipping..."
+                continue
+              fi
+
+              echo "Found instance ID: $INSTANCE_ID"
+
+              # Read script content and escape for JSON
+              SCRIPT_CONTENT=$(cat "$script_file" | jq -Rs .)
+
+              # Update script via API (ModuleScript type)
+              curl -s -X PATCH \
+                "https://apis.roblox.com/cloud/v2/universes/$UNIVERSE_ID/places/$PLACE_ID/instances/$INSTANCE_ID" \
+                -H "x-api-key: $ROBLOX_API_KEY" \
+                -H "Content-Type: application/json" \
+                -d "{\"engineInstance\": {\"Details\": {\"ModuleScript\": {\"Source\": $SCRIPT_CONTENT}}}}" \
+                | jq -r '.done // "Update initiated"'
+
+              echo "✓ Synced $script_name"
             fi
           done
 
