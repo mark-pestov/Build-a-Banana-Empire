@@ -1,8 +1,0 @@
-# Aftman tool configuration for Roblox development
-# This file specifies the tools and versions used for this project
-
-[tools]
-rojo = "rojo-rbx/rojo@7.5.1"
-# Uncomment below to add more tools:
-# selene = "Kampfkarren/selene@0.27.1"
-# stylua = "JohnnyMorganz/StyLua@0.20.0"

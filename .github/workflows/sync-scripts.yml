@@ -1,0 +1,72 @@
+name: Sync Scripts to Roblox
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ServerScriptService/**'
+      - 'ReplicatedStorage/**'
+      - 'StarterPlayer/**'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install rbxcloud
+        run: |
+          # Download and install rbxcloud
+          curl -L https://github.com/Sleitnick/rbxcloud/releases/latest/download/rbxcloud-linux-x86_64.zip -o rbxcloud.zip
+          unzip rbxcloud.zip
+          chmod +x rbxcloud
+          sudo mv rbxcloud /usr/local/bin/
+
+      - name: Sync ServerScriptService
+        if: hashFiles('ServerScriptService/**') != ''
+        env:
+          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+          UNIVERSE_ID: ${{ secrets.ROBLOX_UNIVERSE_ID }}
+        run: |
+          # Sync all scripts in ServerScriptService
+          for script in ServerScriptService/*.luau; do
+            if [ -f "$script" ]; then
+              script_name=$(basename "$script" .luau)
+              echo "Syncing $script_name..."
+              rbxcloud experience publish-script \
+                --api-key "$ROBLOX_API_KEY" \
+                --universe-id "$UNIVERSE_ID" \
+                --script "$script" \
+                --script-type ServerScript \
+                --script-name "$script_name" || echo "Failed to sync $script_name"
+            fi
+          done
+
+      - name: Sync ReplicatedStorage
+        if: hashFiles('ReplicatedStorage/**') != ''
+        env:
+          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+          UNIVERSE_ID: ${{ secrets.ROBLOX_UNIVERSE_ID }}
+        run: |
+          # Sync all scripts in ReplicatedStorage
+          for script in ReplicatedStorage/*.luau; do
+            if [ -f "$script" ]; then
+              script_name=$(basename "$script" .luau)
+              echo "Syncing $script_name..."
+              rbxcloud experience publish-script \
+                --api-key "$ROBLOX_API_KEY" \
+                --universe-id "$UNIVERSE_ID" \
+                --script "$script" \
+                --script-type ModuleScript \
+                --script-name "$script_name" || echo "Failed to sync $script_name"
+            fi
+          done
+
+      - name: Deployment Summary
+        run: |
+          echo "Script sync completed!"
+          echo "Check the logs above for any errors."
